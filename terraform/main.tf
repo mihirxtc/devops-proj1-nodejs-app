@@ -9,6 +9,16 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 }
 
+# The "Warehouse" for your Docker images
+resource "aws_ecr_repository" "app" {
+  name         = "node-app"
+  force_delete = true # This allows 'terraform destroy' to work even if images are inside
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 # ECS Cluster
 resource "aws_ecs_cluster" "main" { name = "node-app-cluster" }
 
@@ -24,8 +34,9 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([{
-    name         = "node-app"
-    image        = "182335083708.dkr.ecr.us-east-1.amazonaws.com/node-app:latest"
+    name  = "node-app"
+    image = "${aws_ecr_repository.app.repository_url}:latest"
+    # image        = "182335083708.dkr.ecr.us-east-1.amazonaws.com/node-app:latest"
     portMappings = [{ containerPort = 5000, hostPort = 5000 }]
   }])
 }
