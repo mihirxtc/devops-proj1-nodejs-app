@@ -30,12 +30,8 @@ app.get('/ansible', (req, res) => {
     res.send('<h1>Welcome to ansible page</h1>');
 });
 
-app.get('/health', (req, res) => {
-    res.send('<h1>Server is healthy</h1>');
-});
-
-app.get('/mihirxtc', (req, res) => {
-    res.send('<h1>Welcome to mihirxtc page</h1>');
+app.get('/casio', (req, res) => {
+    res.send('<h1>Welcome to casio page</h1>');
 });
 
 app.listen(PORT, () => {
