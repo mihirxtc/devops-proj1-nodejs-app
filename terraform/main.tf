@@ -1,6 +1,6 @@
 provider "aws" { region = "us-east-1" }
 
-# 1. Simple Network (VPC & Subnet)
+# Simple Network (VPC & Subnet)
 resource "aws_vpc" "main" { cidr_block = "10.0.0.0/16" }
 resource "aws_internet_gateway" "igw" { vpc_id = aws_vpc.main.id }
 resource "aws_subnet" "public" {
@@ -9,10 +9,10 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 }
 
-# 2. ECS Cluster
+# ECS Cluster
 resource "aws_ecs_cluster" "main" { name = "node-app-cluster" }
 
-# 3. Task Definition (The instructions for your container)
+# Task Definition (The instructions for your container)
 resource "aws_ecs_task_definition" "app" {
   family                   = "node-app-task"
   network_mode             = "awsvpc"
@@ -30,7 +30,7 @@ resource "aws_ecs_task_definition" "app" {
   }])
 }
 
-# 4. ECS Service (FARGATE SPOT - Saves 70% cost)
+# ECS Service (FARGATE SPOT - Saves 70% cost)
 resource "aws_ecs_service" "app" {
   name            = "node-app-service"
   cluster         = aws_ecs_cluster.main.id
@@ -47,7 +47,7 @@ resource "aws_ecs_service" "app" {
   }
 }
 
-# 5. Security Group (Virtual Firewall)
+# Security Group (Virtual Firewall)
 resource "aws_security_group" "allow_node" {
   vpc_id = aws_vpc.main.id
   ingress {
@@ -64,7 +64,7 @@ resource "aws_security_group" "allow_node" {
   }
 }
 
-# 6. The "Road Map" (Route Table)
+# The "Road Map" (Route Table)
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -74,13 +74,13 @@ resource "aws_route_table" "public" {
   }
 }
 
-# 7. Connect the "Room" to the "Road" (Association)
+# Connect the "Room" to the "Road" (Association)
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
 
-# 8 Create the Execution Role so Fargate can pull from ECR
+# Create the Execution Role so Fargate can pull from ECR
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "node-app-task-execution-role"
 
@@ -94,8 +94,43 @@ resource "aws_iam_role" "ecs_task_execution_role" {
   })
 }
 
-# 9. Attach the standard AWS policy for ECR pulling to that role
+# Attach the standard AWS policy for ECR pulling to that role
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Register GitHub as a trusted Identity Provider
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+}
+
+# Create the Role that GitHub will "Put on" like a costume
+resource "aws_iam_role" "github_actions" {
+  name = "github-actions-ecs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Effect    = "Allow"
+      Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
+      Condition = {
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:mihirxtc/devops-proj1-nodejs-app:*"
+        },
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+
+# Give the role permissions to deploy to ECS and ECR
+resource "aws_iam_role_policy_attachment" "github_actions_attach" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
 }
